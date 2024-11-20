@@ -164,3 +164,20 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(appointments, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], url_path='details')
+    def appointment_details(self, request, pk=None):
+        """
+        Custom action to return appointment details by its ID.
+        """
+        try:
+            appointment = self.get_queryset().get(pk=pk)
+        except Appointment.DoesNotExist:
+            return Response(
+                {"detail": "Appointment not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = self.get_serializer(appointment)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+

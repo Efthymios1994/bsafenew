@@ -179,19 +179,19 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(appointments, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-@action(detail=False, methods=['get'], url_path='appointments-by-technician')
-def appointments_by_technician(self, request):
+    @action(detail=False, methods=['get'], url_path='appointments-by-technician')
+    def appointments_by_technician(self, request):
     """
     Custom action to return all technicians with their appointments on a specific day.
     """
     date = request.query_params.get('date')
-
+    
     if not date:
         return Response(
             {"detail": "Please provide a 'date' query parameter."},
             status=status.HTTP_400_BAD_REQUEST
         )
-
+    
     try:
         # Filter appointments for the given date
         appointments = self.queryset.filter(date=date)
@@ -200,16 +200,16 @@ def appointments_by_technician(self, request):
             {"detail": "Invalid date format. Please use 'YYYY-MM-DD'."},
             status=status.HTTP_400_BAD_REQUEST
         )
-
+    
     # Group appointments by technician
     grouped_appointments = defaultdict(list)
     for appointment in appointments:
         for technician in appointment.technicians.all():
             grouped_appointments[technician.id].append(appointment)
-
+    
     # Retrieve all technicians
     technicians = Technician.objects.all()
-
+    
     # Prepare response data
     response_data = []
     for technician in technicians:
@@ -218,6 +218,6 @@ def appointments_by_technician(self, request):
             "technician_name": technician.name,
             "appointments": AppointmentSerializer(grouped_appointments.get(technician.id, []), many=True).data
         })
-
+    
     return Response(response_data, status=status.HTTP_200_OK)
 

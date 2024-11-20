@@ -5,7 +5,7 @@ from .serializers import CustomerSerializer, TechnicianSerializer, AppointmentSe
 from rest_framework.permissions import IsAuthenticated
 from bsafe.permissions import IsSuperUser
 from rest_framework import status
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # Create your views here.
 from rest_framework.decorators import action
@@ -112,95 +112,6 @@ class TechnicianViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(technician)
         return Response(serializer.data, status=status.HTTP_200_OK)
-        
-    @action(detail=False, methods=['get'], url_path='daily-schedule')
-    def daily_schedule(self, request):
-        """
-        Returns the schedule for all technicians on a specific date.
-        """
-        date_str = request.query_params.get('date')
-
-        if not date_str:
-            return Response(
-                {"error": "Please provide a 'date' query parameter in YYYY-MM-DD format."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            date = datetime.strptime(date_str, "%Y-%m-%d").date()
-        except ValueError:
-            return Response(
-                {"error": "Invalid date format. Use YYYY-MM-DD."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Step 1: Fetch all technicians
-        technicians = Technician.objects.all()
-
-        # Step 2: Generate time slots for the day (e.g., 9 AM to 5 PM in 30-minute intervals)
-        start_time = datetime.combine(date, datetime.min.time()).replace(hour=9)
-        end_time = datetime.combine(date, datetime.min.time()).replace(hour=17)
-        time_slots = []
-        current_time = start_time
-        while current_time < end_time:
-            slot_end = current_time + timedelta(minutes=30)
-            time_slots.append({
-                'start_time': current_time.time(),
-                'end_time': slot_end.time()
-            })
-            current_time = slot_end
-
-        # Step 3: For each technician, determine availability for each time slot
-        schedule = []
-        for technician in technicians:
-            technician_schedule = {
-                'technician_id': technician.id,
-                'technician_name': technician.name,
-                'slots': []
-            }
-
-            # Fetch appointments for this technician on the given date
-            appointments = Appointment.objects.filter(
-                technicians=technician,
-                date=date
-            )
-
-            for slot in time_slots:
-                slot_start_time = slot['start_time']
-                slot_end_time = slot['end_time']
-
-                # Check if the technician has an appointment overlapping with this time slot
-                overlapping_appointments = appointments.filter(
-                    start_time__lt=slot_end_time,
-                    end_time__gt=slot_start_time
-                )
-
-                if overlapping_appointments.exists():
-                    appointment = overlapping_appointments.first()
-                    technician_schedule['slots'].append({
-                        'start_time': slot_start_time.strftime('%H:%M:%S'),
-                        'end_time': slot_end_time.strftime('%H:%M:%S'),
-                        'is_occupied': True,
-                        'appointment_name': appointment.appointment_name,
-                        'appointment_id': appointment.id,
-                        'service_type': appointment.service_type
-                    })
-                else:
-                    technician_schedule['slots'].append({
-                        'start_time': slot_start_time.strftime('%H:%M:%S'),
-                        'end_time': slot_end_time.strftime('%H:%M:%S'),
-                        'is_occupied': False,
-                        'appointment_name': None,
-                        'appointment_id': None,
-                        'service_type': None
-                    })
-
-            schedule.append(technician_schedule)
-
-        return Response(schedule, status=status.HTTP_200_OK)
-
-
-
 
 class AppointmentViewSet(viewsets.ModelViewSet):
     queryset = Appointment.objects.all()
@@ -268,19 +179,45 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(appointments, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=['get'], url_path='details')
-    def appointment_details(self, request, pk=None):
-        """
-        Custom action to return appointment details by its ID.
-        """
-        try:
-            appointment = self.get_queryset().get(pk=pk)
-        except Appointment.DoesNotExist:
-            return Response(
-                {"detail": "Appointment not found."},
-                status=status.HTTP_404_NOT_FOUND
-            )
+@action(detail=False, methods=['get'], url_path='appointments-by-technician')
+def appointments_by_technician(self, request):
+    """
+    Custom action to return all technicians with their appointments on a specific day.
+    """
+    date = request.query_params.get('date')
 
-        serializer = self.get_serializer(appointment)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+    if not date:
+        return Response(
+            {"detail": "Please provide a 'date' query parameter."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        # Filter appointments for the given date
+        appointments = self.queryset.filter(date=date)
+    except ValueError:
+        return Response(
+            {"detail": "Invalid date format. Please use 'YYYY-MM-DD'."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Group appointments by technician
+    grouped_appointments = defaultdict(list)
+    for appointment in appointments:
+        for technician in appointment.technicians.all():
+            grouped_appointments[technician.id].append(appointment)
+
+    # Retrieve all technicians
+    technicians = Technician.objects.all()
+
+    # Prepare response data
+    response_data = []
+    for technician in technicians:
+        response_data.append({
+            "technician_id": technician.id,
+            "technician_name": technician.name,
+            "appointments": AppointmentSerializer(grouped_appointments.get(technician.id, []), many=True).data
+        })
+
+    return Response(response_data, status=status.HTTP_200_OK)
 

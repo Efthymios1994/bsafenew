@@ -140,3 +140,27 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='by-date')
+    def appointments_by_date(self, request):
+        """
+        Custom action to return all appointments on a specific date.
+        """
+        date = request.query_params.get('date')
+
+        if not date:
+            return Response(
+                {"detail": "Please provide a 'date' query parameter."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            appointments = self.queryset.filter(date=date)
+        except ValueError:
+            return Response(
+                {"detail": "Invalid date format. Please use 'YYYY-MM-DD'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = self.get_serializer(appointments, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

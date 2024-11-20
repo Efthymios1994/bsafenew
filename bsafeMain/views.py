@@ -6,11 +6,13 @@ from rest_framework.permissions import IsAuthenticated
 from bsafe.permissions import IsSuperUser
 from rest_framework import status
 from datetime import datetime
+from collections import defaultdict
 
 # Create your views here.
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q
+
 
 class CustomerViewSet(viewsets.ModelViewSet):
     queryset = Customer.objects.all()
@@ -21,10 +23,8 @@ class CustomerViewSet(viewsets.ModelViewSet):
         query = request.query_params.get('q', None)
         customer_id = request.query_params.get('customer_id', None)
 
-        # Start with all customers
         customers = Customer.objects.all()
 
-        # Filter by search query if provided
         if query:
             customers = customers.filter(
                 Q(name__icontains=query) |
@@ -33,7 +33,6 @@ class CustomerViewSet(viewsets.ModelViewSet):
                 Q(phone__icontains=query)
             )
 
-        # Filter by customer_id if provided
         if customer_id:
             customers = customers.filter(id=customer_id)
 
@@ -53,16 +52,14 @@ class TechnicianViewSet(viewsets.ModelViewSet):
     def search(self, request):
         query = request.query_params.get('q', None)
 
+        technicians = Technician.objects.all()
+
         if query:
-            # Filter technicians based on the search query
-            technicians = Technician.objects.filter(
+            technicians = technicians.filter(
                 Q(name__icontains=query) |
                 Q(email__icontains=query) |
                 Q(phone__icontains=query)
             )
-        else:
-            # If query is empty or not provided, return all technicians
-            technicians = Technician.objects.all()
 
         serializer = self.get_serializer(technicians, many=True)
         return Response(serializer.data)
@@ -99,9 +96,6 @@ class TechnicianViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='details')
     def technician_details(self, request, pk=None):
-        """
-        Custom action to return technician data by their ID.
-        """
         try:
             technician = self.get_queryset().get(pk=pk)
         except Technician.DoesNotExist:
@@ -112,6 +106,7 @@ class TechnicianViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(technician)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class AppointmentViewSet(viewsets.ModelViewSet):
     queryset = Appointment.objects.all()
@@ -127,7 +122,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         date = self.request.query_params.get('date')
         start_time = self.request.query_params.get('start_time')
         end_time = self.request.query_params.get('end_time')
-        search = self.request.query_params.get('search')  # New parameter for searching
+        search = self.request.query_params.get('search')
 
         if technician_id:
             queryset = queryset.filter(technicians__id=technician_id)
@@ -148,18 +143,12 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='filtered')
     def filtered_appointments(self, request):
-        """
-        Custom action to filter appointments based on query parameters.
-        """
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='by-date')
     def appointments_by_date(self, request):
-        """
-        Custom action to return all appointments on a specific date.
-        """
         date = request.query_params.get('date')
 
         if not date:
@@ -181,36 +170,29 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='appointments-by-technician')
     def appointments_by_technician(self, request):
-        """
-        Custom action to return all technicians with their appointments on a specific day.
-        """
         date = request.query_params.get('date')
-        
+
         if not date:
             return Response(
                 {"detail": "Please provide a 'date' query parameter."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         try:
-            # Filter appointments for the given date
             appointments = self.queryset.filter(date=date)
         except ValueError:
             return Response(
                 {"detail": "Invalid date format. Please use 'YYYY-MM-DD'."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Group appointments by technician
+
         grouped_appointments = defaultdict(list)
         for appointment in appointments:
             for technician in appointment.technicians.all():
                 grouped_appointments[technician.id].append(appointment)
-        
-        # Retrieve all technicians
+
         technicians = Technician.objects.all()
-        
-        # Prepare response data
+
         response_data = []
         for technician in technicians:
             response_data.append({
@@ -218,6 +200,5 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                 "technician_name": technician.name,
                 "appointments": AppointmentSerializer(grouped_appointments.get(technician.id, []), many=True).data
             })
-        
-        return Response(response_data, status=status.HTTP_200_OK)
 
+        return Response(response_data, status=status.HTTP_200_OK)

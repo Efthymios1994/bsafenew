@@ -112,6 +112,92 @@ class TechnicianViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(technician)
         return Response(serializer.data, status=status.HTTP_200_OK)
+        
+    @action(detail=False, methods=['get'], url_path='daily-schedule')
+    def daily_schedule(self, request):
+        """
+        Returns the schedule for all technicians on a specific date.
+        """
+        date_str = request.query_params.get('date')
+
+        if not date_str:
+            return Response(
+                {"error": "Please provide a 'date' query parameter in YYYY-MM-DD format."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            return Response(
+                {"error": "Invalid date format. Use YYYY-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Step 1: Fetch all technicians
+        technicians = Technician.objects.all()
+
+        # Step 2: Generate time slots for the day (e.g., 9 AM to 5 PM in 30-minute intervals)
+        start_time = datetime.combine(date, datetime.min.time()).replace(hour=9)
+        end_time = datetime.combine(date, datetime.min.time()).replace(hour=17)
+        time_slots = []
+        current_time = start_time
+        while current_time < end_time:
+            slot_end = current_time + timedelta(minutes=30)
+            time_slots.append({
+                'start_time': current_time.time(),
+                'end_time': slot_end.time()
+            })
+            current_time = slot_end
+
+        # Step 3: For each technician, determine availability for each time slot
+        schedule = []
+        for technician in technicians:
+            technician_schedule = {
+                'technician_id': technician.id,
+                'technician_name': technician.name,
+                'slots': []
+            }
+
+            # Fetch appointments for this technician on the given date
+            appointments = Appointment.objects.filter(
+                technicians=technician,
+                date=date
+            )
+
+            for slot in time_slots:
+                slot_start_time = slot['start_time']
+                slot_end_time = slot['end_time']
+
+                # Check if the technician has an appointment overlapping with this time slot
+                overlapping_appointments = appointments.filter(
+                    start_time__lt=slot_end_time,
+                    end_time__gt=slot_start_time
+                )
+
+                if overlapping_appointments.exists():
+                    appointment = overlapping_appointments.first()
+                    technician_schedule['slots'].append({
+                        'start_time': slot_start_time.strftime('%H:%M:%S'),
+                        'end_time': slot_end_time.strftime('%H:%M:%S'),
+                        'is_occupied': True,
+                        'appointment_name': appointment.appointment_name,
+                        'appointment_id': appointment.id,
+                        'service_type': appointment.service_type
+                    })
+                else:
+                    technician_schedule['slots'].append({
+                        'start_time': slot_start_time.strftime('%H:%M:%S'),
+                        'end_time': slot_end_time.strftime('%H:%M:%S'),
+                        'is_occupied': False,
+                        'appointment_name': None,
+                        'appointment_id': None,
+                        'service_type': None
+                    })
+
+            schedule.append(technician_schedule)
+
+        return Response(schedule, status=status.HTTP_200_OK)
 
 
 

@@ -228,3 +228,35 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         # Serialize and return the appointment data
         serializer = self.get_serializer(appointment)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['delete'], url_path='delete-appointment')
+    def delete_appointment(self, request):
+        """
+        Custom action to delete an appointment by its ID.
+        """
+        appointment_id = request.query_params.get('id')
+
+        if not appointment_id:
+            return Response(
+                {"detail": "Please provide an 'id' query parameter."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Fetch the appointment by ID
+            appointment = Appointment.objects.get(id=appointment_id)
+        except Appointment.DoesNotExist:
+            return Response(
+                {"detail": f"Appointment with ID {appointment_id} does not exist."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Delete the appointment
+        appointment.delete()
+
+        return Response(
+            {"detail": f"Appointment with ID {appointment_id} has been deleted."},
+            status=status.HTTP_200_OK
+        )
+
+    

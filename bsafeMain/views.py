@@ -107,6 +107,23 @@ class TechnicianViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(technician)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['get'], url_path='by-id')
+    def technician_by_id(self, request, pk=None):
+        """
+        Custom action to return technician data by their ID.
+        """
+        try:
+            # Fetch technician by primary key (ID)
+            technician = self.get_queryset().get(pk=pk)
+        except Technician.DoesNotExist:
+            return Response(
+                {"detail": "Technician not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = self.get_serializer(technician)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class AppointmentViewSet(viewsets.ModelViewSet):
     queryset = Appointment.objects.all()
@@ -259,4 +276,3 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK
         )
 
-    

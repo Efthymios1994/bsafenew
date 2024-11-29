@@ -100,6 +100,11 @@ DATABASES = {
 }
 DATABASES["default"] = dj_database_url.parse(config("DATABASE_URL"))
 
+# Add or override options explicitly
+DATABASES['default']['OPTIONS'] = {
+    'client_encoding': 'utf8',
+}
+
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 

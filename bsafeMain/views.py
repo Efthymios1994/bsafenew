@@ -341,3 +341,27 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_200_OK
         )
+
+    @action(detail=False, methods=['get'], url_path='by-customer')
+    def appointments_by_customer(self, request):
+        """
+        Custom action to return all appointments for a specific customer.
+        """
+        customer_id = request.query_params.get('customer_id', None)
+
+        if not customer_id:
+            return Response(
+                {"detail": "Please provide a 'customer_id' query parameter."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            appointments = self.queryset.filter(customer__id=customer_id)
+        except ValueError:
+            return Response(
+                {"detail": "Invalid customer ID."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = self.get_serializer(appointments, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

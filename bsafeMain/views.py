@@ -155,12 +155,10 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(start_time__gte=start_time, end_time__lte=end_time)
         if search:
             queryset = queryset.filter(
-                Q(customer__name__icontains=search) |
-                Q(customer__address__icontains=search) |
-                Q(customer__email__icontains=search) |
-                Q(customer__phone__icontains=search) |
-                Q(appointment_name__icontains=search)
-            )
+                Q(appointment_name__icontains=search) |
+                Q(date__icontains=search) |  # Matches the `date` field
+                Q(technicians__name__icontains=search)  # Matches technician names
+            ).distinct()  # Avoid duplicate results due to ManyToMany relationship
 
         return queryset
 

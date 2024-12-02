@@ -349,9 +349,11 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='by-customer')
     def appointments_by_customer(self, request):
         """
-        Custom action to return all appointments for a specific customer.
+        Custom action to return all appointments for a specific customer,
+        with optional search functionality.
         """
         customer_id = request.query_params.get('customer_id', None)
+        search = request.query_params.get('search', None)  # New search parameter
 
         if not customer_id:
             return Response(
@@ -361,6 +363,15 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
         try:
             appointments = self.queryset.filter(customer__id=customer_id)
+
+            if search:
+                # Apply search filters
+                appointments = appointments.filter(
+                    Q(appointment_name__icontains=search) |
+                    Q(date__icontains=search) |
+                    Q(technicians__name__icontains=search)
+                ).distinct()
+
         except ValueError:
             return Response(
                 {"detail": "Invalid customer ID."},

@@ -17,6 +17,8 @@ from django.db.models import Q
 class CustomerViewSet(viewsets.ModelViewSet):
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
+    filter_backends = [SearchFilter]  # Add SearchFilter
+    search_fields = ['name', 'email', 'address', 'phone']  # Define searchable fields
 
     @action(detail=False, methods=['get'], url_path='search')
     def search(self, request):

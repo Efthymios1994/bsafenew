@@ -130,6 +130,30 @@ class TechnicianViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(technician)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=['post'], url_path='by-ids')
+    def get_by_ids(self, request):
+        """
+        Custom action to return data for a list of technician IDs.
+        """
+        technician_ids = request.data.get('technician_ids', None)
+
+        if not technician_ids or not isinstance(technician_ids, list):
+            return Response(
+                {"detail": "Please provide a list of technician IDs as 'technician_ids' in the request body."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        technicians = self.queryset.filter(id__in=technician_ids)
+
+        if not technicians.exists():
+            return Response(
+                {"detail": "No technicians found for the provided IDs."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = self.get_serializer(technicians, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class AppointmentViewSet(viewsets.ModelViewSet):
     queryset = Appointment.objects.all()

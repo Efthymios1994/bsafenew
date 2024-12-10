@@ -404,3 +404,81 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(appointments, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='availability-by-day-exclude')
+    def availability_by_day_exclude(self, request):
+        """
+        Custom action to get available and unavailable slots for given technicians on a specific date,
+        excluding a specific appointment ID from consideration.
+        """
+        date_str = request.query_params.get('date')
+        technician_ids = request.query_params.get('technician_ids')  # Accept comma-separated list
+        appointment_id = request.query_params.get('appointment_id')  # Exclude this appointment ID
+
+        if not date_str or not technician_ids:
+            return Response(
+                {"error": "Please provide 'date', 'technician_ids', and optionally 'appointment_id' as query parameters."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            return Response(
+                {"error": "Invalid date format. Use YYYY-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Parse technician IDs from the comma-separated string
+        try:
+            technician_ids = [int(id.strip()) for id in technician_ids.strip('[]').split(',')]
+        except ValueError:
+            return Response(
+                {"error": "Invalid format for 'technician_ids'. Use a comma-separated list of integers."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Initialize 30-minute slots from 9:00 AM to 5:00 PM
+        start_time = time(9, 0)
+        end_time = time(17, 0)
+        all_slots = []
+        current_time = start_time
+        while current_time < end_time:
+            next_time = (datetime.combine(date, current_time) + timedelta(minutes=30)).time()
+            all_slots.append((current_time.strftime('%H:%M:%S'), next_time.strftime('%H:%M:%S')))
+            current_time = next_time
+
+        # Find unavailable slots based on appointments, excluding the given appointment ID
+        unavailable_slots = set()
+        for technician_id in technician_ids:
+            appointments = Appointment.objects.filter(
+                technicians__id=technician_id,
+                date=date
+            )
+            if appointment_id:
+                try:
+                    appointments = appointments.exclude(id=int(appointment_id))
+                except ValueError:
+                    return Response(
+                        {"error": "Invalid format for 'appointment_id'. It should be an integer."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            for appointment in appointments:
+                unavailable_slots.add((appointment.start_time.strftime('%H:%M:%S'),
+                                       appointment.end_time.strftime('%H:%M:%S')))
+
+        # Determine available slots
+        available_slots = [slot for slot in all_slots if slot not in unavailable_slots]
+
+        # Response
+        return Response(
+            {
+                "date": date_str,
+                "technician_ids": technician_ids,
+                "available_slots": available_slots,
+                "unavailable_slots": list(unavailable_slots)
+            },
+            status=status.HTTP_200_OK
+        )
+

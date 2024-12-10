@@ -154,23 +154,25 @@ class TechnicianViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(technicians, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=['get'], url_path='available-technicians-exclude-appointment')
-    def available_technicians_exclude_appointment(self, request):
+    @action(detail=False, methods=['get'], url_path='available-excluding-appointment')
+    def available_excluding_appointment(self, request):
         """
-        Custom action to return data of available technicians for a specific date and time range,
-        excluding a specific appointment ID.
+        Return technicians available for the given date and time range,
+        excluding conflicts with all appointments except the one specified by appointment_id.
         """
         date_str = request.query_params.get('date')
         start_time_str = request.query_params.get('start_time')
         end_time_str = request.query_params.get('end_time')
         appointment_id = request.query_params.get('appointment_id')
     
+        # Validate required parameters
         if not date_str or not start_time_str or not end_time_str or not appointment_id:
             return Response(
                 {"error": "Please provide 'date', 'start_time', 'end_time', and 'appointment_id'."},
                 status=status.HTTP_400_BAD_REQUEST
             )
     
+        # Parse and validate date and time
         try:
             date = datetime.strptime(date_str, "%Y-%m-%d").date()
             start_time = datetime.strptime(start_time_str, "%H:%M:%S").time()
@@ -181,6 +183,7 @@ class TechnicianViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
+        # Validate appointment_id
         try:
             appointment_id = int(appointment_id)
         except ValueError:
@@ -189,14 +192,15 @@ class TechnicianViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
-        # Get technicians available for the specified time and date, excluding the appointment ID
+        # Fetch technicians who are not busy for the given time slot, excluding the specified appointment
         available_technicians = Technician.objects.filter(
-            ~Q(appointments__id=appointment_id),
-            ~Q(appointments__date=date,
-               appointments__start_time__lt=end_time,
-               appointments__end_time__gt=start_time)
+            ~Q(appointments__date=date,  # Conflict date
+               appointments__start_time__lt=end_time,  # Conflict start
+               appointments__end_time__gt=start_time)  # Conflict end
+            | Q(appointments__id=appointment_id)  # Ignore the provided appointment
         ).distinct()
     
+        # Serialize and return the available technicians
         serializer = self.get_serializer(available_technicians, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 

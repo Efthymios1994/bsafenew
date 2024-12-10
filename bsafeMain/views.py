@@ -154,6 +154,51 @@ class TechnicianViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(technicians, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=['get'], url_path='available-excluding-appointment')
+    def available_excluding_appointment(self, request):
+        date_str = request.query_params.get('date')
+        start_time_str = request.query_params.get('start_time')
+        end_time_str = request.query_params.get('end_time')
+        appointment_id = request.query_params.get('appointment_id')
+
+        if not date_str or not start_time_str or not end_time_str or not appointment_id:
+            return Response(
+                {"error": "Please provide 'date', 'start_time', 'end_time', and 'appointment_id'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            start_time = datetime.strptime(start_time_str, "%H:%M:%S").time()
+            end_time = datetime.strptime(end_time_str, "%H:%M:%S").time()
+        except ValueError:
+            return Response(
+                {"error": "Invalid date or time format. Use YYYY-MM-DD for date and HH:MM:SS for time."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            appointment_id = int(appointment_id)
+        except ValueError:
+            return Response(
+                {"error": "Invalid 'appointment_id'. It must be an integer."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Find technicians excluding the appointment ID provided
+        available_technicians = [
+            technician for technician in Technician.objects.all()
+            if technician.is_available(date, start_time, end_time) and
+            not technician.appointments.filter(
+                date=date,
+                start_time__lt=end_time,
+                end_time__gt=start_time
+            ).exclude(id=appointment_id).exists()
+        ]
+
+        serializer = self.get_serializer(available_technicians, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class AppointmentViewSet(viewsets.ModelViewSet):
     queryset = Appointment.objects.all()

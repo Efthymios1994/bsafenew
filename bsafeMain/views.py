@@ -192,13 +192,18 @@ class TechnicianViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
-        # Fetch technicians who are not busy for the given time slot, excluding the specified appointment
-        available_technicians = Technician.objects.filter(
-            ~Q(appointments__date=date,  # Conflict date
-               appointments__start_time__lt=end_time,  # Conflict start
-               appointments__end_time__gt=start_time)  # Conflict end
-            | Q(appointments__id=appointment_id)  # Ignore the provided appointment
-        ).distinct()
+        # Fetch appointments excluding the specified appointment ID
+        conflicting_appointments = Appointment.objects.filter(
+            date=date,
+            start_time__lt=end_time,
+            end_time__gt=start_time
+        ).exclude(id=appointment_id)
+    
+        # Get technicians who are busy during the specified time range
+        busy_technician_ids = conflicting_appointments.values_list('technicians__id', flat=True).distinct()
+    
+        # Get technicians who are not in the busy technician list
+        available_technicians = Technician.objects.exclude(id__in=busy_technician_ids)
     
         # Serialize and return the available technicians
         serializer = self.get_serializer(available_technicians, many=True)

@@ -75,28 +75,37 @@ class TechnicianViewSet(viewsets.ModelViewSet):
         date_str = request.query_params.get('date')
         start_time_str = request.query_params.get('start_time')
         end_time_str = request.query_params.get('end_time')
-
+    
+        # Check for missing parameters
         if not date_str or not start_time_str or not end_time_str:
             return Response(
                 {"error": "Please provide date, start_time, and end_time."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
+    
         try:
-            date = datetime.strptime(date_str, "%Y-%m-%d").date()
-            start_time = datetime.strptime(start_time_str, "%H:%M:%S").time()
-            end_time = datetime.strptime(end_time_str, "%H:%M:%S").time()
-        except ValueError:
+            # Debugging: Log the incoming parameters
+            print(f"Received date: {date_str}, start_time: {start_time_str}, end_time: {end_time_str}")
+            
+            # Parse date and time
+            date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
+            start_time = datetime.strptime(start_time_str.strip(), "%H:%M:%S").time()
+            end_time = datetime.strptime(end_time_str.strip(), "%H:%M:%S").time()
+        except ValueError as e:
+            # Log error for debugging
+            print(f"Parsing error: {e}")
             return Response(
                 {"error": "Invalid date or time format. Use YYYY-MM-DD for date and HH:MM:SS for time."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
+    
+        # Logic to find available technicians
         available_technicians = [
             technician for technician in Technician.objects.all()
             if technician.is_available(date, start_time, end_time)
         ]
-
+    
+        # Serialize the response
         serializer = self.get_serializer(available_technicians, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 

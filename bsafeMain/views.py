@@ -268,6 +268,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
         try:
             appointments = self.queryset.filter(date=date)
+            print(self.queryset.filter(date=date))
         except ValueError:
             return Response(
                 {"detail": "Invalid date format. Please use 'YYYY-MM-DD'."},

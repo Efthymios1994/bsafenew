@@ -84,10 +84,6 @@ class Appointment(models.Model):
                 check=models.Q(start_time__lt=models.F('end_time')),
                 name='start_time_before_end_time'
             ),
-            models.UniqueConstraint(
-                fields=['date', 'start_time', 'end_time'],
-                name='unique_appointment_time'
-            ),
         ]
 
 
